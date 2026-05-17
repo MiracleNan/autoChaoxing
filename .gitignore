@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.DS_Store
 
 # C extensions
 *.so
@@ -154,3 +155,7 @@ config*.ini
 .idea/
 .vscode/
 cache.json
+
+# WebUI local runtime
+.webui.env
+superstar_web.log

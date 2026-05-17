@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block body %}
+  <section class="panel" style="max-width: 480px; margin: 60px auto 0;">
+    <h1 style="margin:0 0 6px; font-size:24px;">SuperStar Local</h1>
+    <p class="muted" style="margin:0 0 20px;">本地登录，密码仅用于换取 cookies，不会外传。</p>
+    {% if error %}
+      <p class="status error">{{ error }}</p>
+    {% endif %}
+    <form class="form-grid" method="post" action="{{ url_for('login') }}" autocomplete="on">
+      <label>
+        手机号账号
+        <input name="username" autocomplete="username" required>
+      </label>
+      <label>
+        登录密码
+        <input name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <div class="actions">
+        <button type="submit">登录</button>
+      </div>
+    </form>
+  </section>
+{% endblock %}

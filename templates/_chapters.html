@@ -1,0 +1,52 @@
+{% if error %}
+  <p class="status error">{{ error }}</p>
+{% else %}
+  <div class="panel subpanel">
+    <div class="panel-header">
+      <div>
+        <h3 class="panel-title">{{ course.get("title") or "课程章节" }}</h3>
+        {% if course.get("teacher") %}
+          <p class="subtitle">{{ course.get("teacher") }}</p>
+        {% endif %}
+      </div>
+      {% if has_locked %}
+        <span class="badge warning">含解锁章节</span>
+      {% else %}
+        <span class="badge">章节可读</span>
+      {% endif %}
+    </div>
+
+    {% if not points %}
+      <p class="status">没有读取到章节。</p>
+    {% else %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>章节</th>
+              <th>任务点</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for point in points %}
+              <tr>
+                <td>{{ point.get("title", "") }}</td>
+                <td><code>{{ point.get("jobCount", "") }}</code></td>
+                <td>
+                  {% if point.get("has_finished") %}
+                    <span class="badge success">已完成</span>
+                  {% elif point.get("need_unlock") %}
+                    <span class="badge warning">需解锁</span>
+                  {% else %}
+                    <span class="badge">未完成</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+{% endif %}

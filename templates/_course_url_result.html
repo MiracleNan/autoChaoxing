@@ -1,0 +1,41 @@
+{% if error %}
+  <p class="status error">{{ error }}</p>
+{% else %}
+  {% if matched %}
+    <p class="status success">已匹配到课程：{{ matched.get("title", "") }}</p>
+  {% else %}
+    <p class="status">链接参数完整，但没有匹配到当前课程列表中的课程。</p>
+  {% endif %}
+
+  <div class="result-grid">
+    <div class="field">
+      <span>courseId</span>
+      <code>{{ parsed.course_id }}</code>
+    </div>
+    <div class="field">
+      <span>clazzId</span>
+      <code>{{ parsed.clazz_id }}</code>
+    </div>
+    <div class="field">
+      <span>cpi</span>
+      <code>{{ parsed.cpi }}</code>
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top: 12px;">
+    <button
+      class="secondary"
+      type="button"
+      hx-get="{{ url_for('course_chapters') }}"
+      hx-target="#course-detail"
+      hx-swap="innerHTML"
+      hx-vals='{
+        "courseId": "{{ parsed.course_id }}",
+        "clazzId": "{{ parsed.clazz_id }}",
+        "cpi": "{{ parsed.cpi }}"
+      }'
+    >
+      查看章节
+    </button>
+  </div>
+{% endif %}

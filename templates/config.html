@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block body %}
+  <nav class="topnav">
+    <span class="brand">⭐ SuperStar</span>
+    <div class="nav-links">
+      <a href="{{ url_for('index') }}">控制台</a>
+      <a href="{{ url_for('config_page') }}" class="active">配置</a>
+      <form method="post" action="{{ url_for('logout') }}" style="display:inline;">
+        <button class="secondary" type="submit" style="font-size:13px; min-height:30px; padding:4px 12px;">退出</button>
+      </form>
+    </div>
+  </nav>
+
+  <div class="tabs" id="config-tabs">
+    <div class="tab active" data-tab="common">基本配置</div>
+    <div class="tab" data-tab="tiku">题库配置</div>
+    <div class="tab" data-tab="notification">通知配置</div>
+  </div>
+
+  {% for section, fields in schema.items() %}
+  <div class="tab-panel {{ 'active' if section == 'common' else '' }}" id="panel-{{ section }}">
+    <form class="panel" onsubmit="saveSection('{{ section }}', event)" style="margin:0;">
+      {% set section_data = data.get(section, {}) %}
+
+      {# Group fields by their 'group' attribute #}
+      {% set groups = {} %}
+      {% for f in fields %}
+        {% set g = f.get('group', '') %}
+        {% if g not in groups %}
+          {% set _ = groups.update({g: []}) %}
+        {% endif %}
+        {% set _ = groups[g].append(f) %}
+      {% endfor %}
+
+      {% for group_name, group_fields in groups.items() %}
+        {% if group_name %}
+          <div class="config-group">
+            <h3>{{ group_name }}</h3>
+        {% endif %}
+
+        {% for f in group_fields %}
+          <div style="margin-bottom:14px;">
+            <label>
+              {{ f.label }}
+              {% if f.type == 'text' or f.type == 'password' %}
+                <input name="{{ f.key }}"
+                       type="{{ 'password' if f.type == 'password' else 'text' }}"
+                       value="{{ section_data.get(f.key, f.get('default', '')) }}"
+                       placeholder="{{ f.get('placeholder', '') }}">
+              {% elif f.type == 'number' %}
+                <input name="{{ f.key }}"
+                       type="number"
+                       value="{{ section_data.get(f.key, f.get('default', '0')) }}"
+                       min="{{ f.get('min', '') }}"
+                       max="{{ f.get('max', '') }}"
+                       step="{{ f.get('step', '') }}">
+              {% elif f.type == 'select' %}
+                <select name="{{ f.key }}">
+                  {% for opt in f.get('options', []) %}
+                    <option value="{{ opt.value }}"
+                            {{ 'selected' if section_data.get(f.key, f.get('default','')) == opt.value else '' }}>
+                      {{ opt.text }}
+                    </option>
+                  {% endfor %}
+                </select>
+              {% elif f.type == 'toggle' %}
+                <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                  <input name="{{ f.key }}" type="checkbox" value="true"
+                         {{ 'checked' if section_data.get(f.key, f.get('default','false')) in ('true','1','yes','on') else '' }}>
+                  <span style="font-weight:400; font-size:13px; color:var(--muted);">
+                    {% if f.key == 'submit' %}启用后自动提交答题{% elif f.key == 'use_cookies' %}使用 cookies.txt 登录{% else %}启用{% endif %}
+                  </span>
+                </div>
+              {% endif %}
+            </label>
+            {% if f.get('help') %}
+              <div class="field-help">{{ f.help }}</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+
+        {% if group_name %}
+          </div>
+        {% endif %}
+      {% endfor %}
+
+      <div class="actions" style="margin-top:20px;">
+        <button type="submit">保存</button>
+        <span id="save-status-{{ section }}" class="muted" style="font-size:13px;"></span>
+      </div>
+    </form>
+  </div>
+  {% endfor %}
+
+  <div class="panel" style="margin-top:16px;">
+    <div class="panel-header">
+      <h2 class="panel-title">AI 大模型连接测试</h2>
+    </div>
+    <p class="muted" style="margin:0 0 12px;">测试当前配置的 AI / SiliconFlow 题库是否可用。会消耗少量 token。</p>
+    <button class="secondary" type="button" onclick="testLLM()">测试连接</button>
+    <span id="llm-test-result" style="margin-left:10px; font-size:13px;"></span>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Tab switching
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    this.classList.add('active');
+    document.getElementById('panel-' + this.dataset.tab).classList.add('active');
+  });
+});
+
+// Save config section
+function saveSection(section, e) {
+  e.preventDefault();
+  const form = e.target;
+  const data = {};
+
+  // Collect form data
+  const formData = new FormData(form);
+  for (const [key, value] of formData.entries()) {
+    if (key in data) {
+      // Multiple values (shouldn't happen but just in case)
+      data[key] = value;
+    } else {
+      data[key] = value;
+    }
+  }
+
+  // Handle checkboxes - unchecked ones won't be in FormData
+  form.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    if (!cb.checked) {
+      data[cb.name] = 'false';
+    } else {
+      data[cb.name] = 'true';
+    }
+  });
+
+  const status = document.getElementById('save-status-' + section);
+  status.textContent = '保存中...';
+  status.style.color = 'var(--muted)';
+
+  fetch('/config/' + section, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data)
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.ok) {
+      status.textContent = '✓ 已保存';
+      status.style.color = 'var(--success)';
+    } else {
+      status.textContent = '✗ ' + (d.error || '保存失败');
+      status.style.color = 'var(--danger)';
+    }
+    setTimeout(() => { status.textContent = ''; }, 3000);
+  })
+  .catch(() => {
+    status.textContent = '✗ 请求失败';
+    status.style.color = 'var(--danger)';
+  });
+}
+
+function testLLM() {
+  const result = document.getElementById('llm-test-result');
+  result.textContent = '测试中...';
+  result.style.color = 'var(--muted)';
+  fetch('/config/test-llm', {method:'POST'})
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        result.textContent = '✓ 连接成功';
+        result.style.color = 'var(--success)';
+      } else {
+        result.textContent = '✗ ' + (d.error || '连接失败');
+        result.style.color = 'var(--danger)';
+      }
+    })
+    .catch(() => {
+      result.textContent = '✗ 请求失败';
+      result.style.color = 'var(--danger)';
+    });
+}
+</script>
+{% endblock %}

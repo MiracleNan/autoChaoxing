@@ -1,0 +1,48 @@
+{% if error %}
+  <p class="status error">{{ error }}</p>
+{% elif not courses %}
+  <p class="muted" style="margin:0;">没有读取到课程。请确认登录账号下有可访问课程。</p>
+{% else %}
+  <p class="muted" style="margin:0 0 10px;">已读取 {{ courses|length }} 门课程。</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>课程名</th>
+          <th>教师</th>
+          <th style="width:80px;">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for course in courses %}
+          <tr>
+            <td>
+              <div style="font-weight:500;">{{ course.get("title", "") }}</div>
+              <code style="font-size:11px; color:var(--muted);">{{ course.get("courseId", "") }} / {{ course.get("clazzId", "") }} / {{ course.get("cpi", "") }}</code>
+            </td>
+            <td>{{ course.get("teacher", "") }}</td>
+            <td>
+              <div style="display:flex; gap:6px;">
+                <button class="secondary" style="font-size:12px; min-height:28px; padding:2px 8px;"
+                        hx-get="{{ url_for('course_chapters') }}"
+                        hx-target="#course-detail"
+                        hx-swap="innerHTML"
+                        hx-vals='{"courseId":"{{ course.get("courseId","") }}","clazzId":"{{ course.get("clazzId","") }}","cpi":"{{ course.get("cpi","") }}"}'>
+                  章节
+                </button>
+                <button style="font-size:12px; min-height:28px; padding:2px 8px;"
+                        data-start-course
+                        data-course-id="{{ course.get('courseId','') }}"
+                        data-clazz-id="{{ course.get('clazzId','') }}"
+                        data-cpi="{{ course.get('cpi','') }}">
+                  开始学习
+                </button>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+

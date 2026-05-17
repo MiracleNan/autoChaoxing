@@ -137,7 +137,8 @@ class Chaoxing:
         if login_with_cookies:
             logger.info("Logging in with cookies")
             SessionManager.update_cookies()
-            logger.debug(f"Logged in with cookies: {SessionManager.get_instance()._session.cookies}")
+            cookie_count = len(SessionManager.get_instance()._session.cookies)
+            logger.debug("Loaded {} cookie(s) for cookie login", cookie_count)
             if not self._validate_cookie_session():
                 logger.warning("Cookie 登录校验失败，尝试使用账号密码重新登录")
                 if self.account and self.account.username and self.account.password:

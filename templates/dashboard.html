@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block body %}
+  <nav class="topnav">
+    <span class="brand">⭐ SuperStar</span>
+    <div class="nav-links">
+      <a href="{{ url_for('index') }}" class="active">控制台</a>
+      <a href="{{ url_for('config_page') }}">配置</a>
+      <form method="post" action="{{ url_for('logout') }}" style="display:inline;">
+        <button class="secondary" type="submit" style="font-size:13px; min-height:30px; padding:4px 12px;">退出</button>
+      </form>
+    </div>
+  </nav>
+
+  <div class="grid-2">
+    <!-- Left: courses + task control -->
+    <div>
+      <section class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">课程列表</h2>
+          <button class="secondary" type="button"
+                  hx-get="{{ url_for('courses') }}"
+                  hx-target="#course-list"
+                  hx-swap="innerHTML">
+            刷新
+          </button>
+        </div>
+        <div id="course-list"
+             hx-get="{{ url_for('courses') }}"
+             hx-trigger="load"
+             hx-swap="innerHTML">
+          <p class="muted">正在读取课程列表...</p>
+        </div>
+        <div id="course-detail" style="margin-top:12px;"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">课程链接解析</h2>
+        </div>
+        <form class="form-grid"
+              hx-post="{{ url_for('parse_course_url_route') }}"
+              hx-target="#course-url-result"
+              hx-swap="innerHTML">
+          <label>
+            课程页面 URL
+            <input name="course_url" placeholder="https://...courseid=...&clazzid=...&cpi=..." required>
+          </label>
+          <div class="actions">
+            <button type="submit">解析链接</button>
+          </div>
+        </form>
+        <div id="course-url-result" style="margin-top:12px;"></div>
+      </section>
+    </div>
+
+    <!-- Right: task progress -->
+    <div>
+      <section class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">任务进度</h2>
+          <span id="task-badge" class="badge info">无运行任务</span>
+        </div>
+        <div id="task-progress">
+          {% if active_task %}
+            <p class="muted">正在加载任务状态...</p>
+          {% else %}
+            <p class="muted" style="margin:0;">在课程列表中点击「开始学习」启动刷课任务。</p>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="panel" id="task-log-panel" style="display:none;">
+        <div class="panel-header">
+          <h2 class="panel-title">运行日志</h2>
+        </div>
+        <div id="task-log" style="max-height:300px; overflow-y:auto; font-family:monospace; font-size:13px; background:#f8fafb; border-radius:6px; padding:10px;">
+        </div>
+      </section>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  const badge = document.getElementById('task-badge');
+  const progressDiv = document.getElementById('task-progress');
+  const logDiv = document.getElementById('task-log');
+  const logPanel = document.getElementById('task-log-panel');
+  const courseList = document.getElementById('course-list');
+
+  function formatTime(sec) {
+    if (!sec || sec <= 0) return '-';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return m > 0 ? m + '分' + s + '秒' : s + '秒';
+  }
+
+  function renderProgress(tasks) {
+    if (!tasks || tasks.length === 0) {
+      badge.className = 'badge info';
+      badge.textContent = '无运行任务';
+      progressDiv.innerHTML = '<p class="muted" style="margin:0;">在课程列表中点击「开始学习」启动刷课任务。</p>';
+      logPanel.style.display = 'none';
+      return;
+    }
+
+    let html = '';
+    for (const t of tasks) {
+      const pct = t.total_chapters > 0
+        ? Math.round(t.completed_chapters / t.total_chapters * 100) : 0;
+      const statusText = {idle:'等待',running:'运行中',stopping:'停止中',done:'完成',error:'异常'}[t.status] || t.status;
+      const statusClass = {running:'running',done:'success',error:'warning',stopping:'warning'}[t.status] || 'info';
+      const barClass = {done:'done',error:'error'}[t.status] || '';
+
+      if (t.status === 'running' || t.status === 'stopping') {
+        badge.className = 'badge running';
+        badge.textContent = statusText;
+      } else if (t.status === 'done') {
+        badge.className = 'badge success';
+        badge.textContent = '已完成';
+      } else if (t.status === 'error') {
+        badge.className = 'badge warning';
+        badge.textContent = '异常';
+      }
+
+      html += '<div style="margin-bottom:14px;">';
+      html += '<div style="display:flex; justify-content:space-between; margin-bottom:6px;">';
+      html += '<strong>' + (t.course_title || t.task_id) + '</strong>';
+      html += '<span class="badge ' + statusClass + '">' + statusText + '</span>';
+      html += '</div>';
+      html += '<div class="progress-bar"><div class="fill ' + barClass + '" style="width:' + pct + '%;"></div></div>';
+      html += '<div style="display:flex; justify-content:space-between; margin-top:6px; font-size:13px; color:var(--muted);">';
+      html += '<span>' + t.completed_chapters + '/' + t.total_chapters + ' 章节</span>';
+      html += '<span>耗时 ' + formatTime(t.elapsed) + '</span>';
+      html += '</div>';
+
+      if (t.current_chapter) {
+        html += '<p style="margin:6px 0 0; font-size:13px;">当前：' + t.current_chapter + '</p>';
+      }
+      if (t.errors && t.errors.length > 0) {
+        html += '<div style="margin-top:8px; font-size:12px; color:var(--danger);">';
+        for (const err of t.errors.slice(-3)) {
+          html += '<div>⚠ ' + err + '</div>';
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+
+      if (t.status === 'running') {
+        html += '<button class="danger" id="btn-stop-task" style="margin-top:8px;">停止任务</button>';
+      }
+    }
+    progressDiv.innerHTML = html;
+
+    // Wire up stop button
+    const stopBtn = document.getElementById('btn-stop-task');
+    if (stopBtn) {
+      stopBtn.onclick = function() {
+        fetch("{{ url_for('task_stop') }}", {method:'POST'})
+          .then(r => r.json())
+          .then(d => { if (d.error) alert(d.error); })
+          .catch(() => alert('请求失败'));
+      };
+    }
+
+    const hasRunning = tasks.some(t => t.status === 'running' || t.status === 'stopping');
+    logPanel.style.display = hasRunning ? 'block' : 'none';
+  }
+
+  // SSE
+  let evtSource = null;
+  function connectSSE() {
+    if (evtSource) evtSource.close();
+    evtSource = new EventSource("{{ url_for('task_progress') }}");
+    evtSource.onmessage = function(e) {
+      try {
+        const data = JSON.parse(e.data);
+        if (Array.isArray(data)) renderProgress(data);
+      } catch(err) {}
+    };
+    evtSource.onerror = function() {
+      setTimeout(connectSSE, 3000);
+    };
+  }
+
+  // Initial load
+  fetch("{{ url_for('task_status') }}")
+    .then(r => r.json())
+    .then(renderProgress)
+    .catch(() => {});
+  connectSSE();
+
+  // Event delegation: start-task buttons (works even after htmx swap)
+  courseList.addEventListener('click', function(e) {
+    const btn = e.target.closest('[data-start-course]');
+    if (!btn) return;
+    e.preventDefault();
+    const form = new FormData();
+    form.append('courseId', btn.dataset.courseId);
+    form.append('clazzId', btn.dataset.clazzId);
+    form.append('cpi', btn.dataset.cpi);
+    btn.disabled = true;
+    btn.textContent = '启动中...';
+    fetch("{{ url_for('task_start') }}", {method:'POST', body: form})
+      .then(r => r.json())
+      .then(data => {
+        btn.disabled = false;
+        btn.textContent = '开始学习';
+        if (data.error) {
+          alert(data.error);
+        } else {
+          addLog('任务已启动: ' + (data.course_title || data.task_id));
+        }
+      })
+      .catch(() => {
+        btn.disabled = false;
+        btn.textContent = '开始学习';
+        alert('启动失败');
+      });
+  });
+
+  function addLog(msg) {
+    if (!logDiv) return;
+    const time = new Date().toLocaleTimeString();
+    logDiv.innerHTML += '<div style="margin-bottom:2px;">[' + time + '] ' + msg + '</div>';
+    logDiv.scrollTop = logDiv.scrollHeight;
+  }
+})();
+</script>
+{% endblock %}
